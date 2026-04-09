@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
+if(WIN32 AND NOT MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--allow-multiple-definition")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--allow-multiple-definition")
+endif()
+
+if(MSVC)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 set(CUDA_FOUND FALSE)
 
 if(NOT NO_CUDA)
@@ -35,10 +44,42 @@ endif()
 #
 if(CUDA_FOUND)
     set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};
-        -std=c++11;-O3;--ptxas-options=-v;-arch sm_60
-        ;-lineinfo
+        -O3;--ptxas-options=-v;-arch sm_60
+        ;-lineinfo;-allow-unsupported-compiler
+        ;-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
     )
+    if(NOT MSVC)
+        set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-std=c++11)
+    endif()
 endif()
+
+if(NOT OPENCL_ROOT)
+    if(CUDA_FOUND)
+        set(OPENCL_ROOT ${CUDA_TOOLKIT_ROOT_DIR})
+    else()
+        set(OPENCL_ROOT "F:/software/cuda")
+    endif()
+endif()
+find_library(OpenCL_LIBRARY NAMES OpenCL
+    PATHS
+        ${OPENCL_ROOT}/lib/x64
+        ${OPENCL_ROOT}/lib64
+        /usr/lib
+        /usr/local/lib
+    NO_DEFAULT_PATH
+)
+if(NOT OpenCL_LIBRARY)
+    set(OpenCL_LIBRARY "-lOpenCL")
+endif()
+find_path(OpenCL_INCLUDE_DIR NAMES CL/cl.h
+    PATHS
+        ${OPENCL_ROOT}/include
+        /usr/include
+        /usr/local/include
+    NO_DEFAULT_PATH
+)
+message("INFO: OpenCL library: ${OpenCL_LIBRARY}")
+message("INFO: OpenCL include: ${OpenCL_INCLUDE_DIR}")
 
 add_subdirectory(ext/argon2)
 
@@ -91,13 +132,15 @@ add_library(argon2-opencl SHARED
 target_include_directories(argon2-opencl INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${OpenCL_INCLUDE_DIR}
 )
 target_include_directories(argon2-opencl PRIVATE
     include/argon2-opencl
     lib/argon2-opencl
+    ${OpenCL_INCLUDE_DIR}
 )
 target_link_libraries(argon2-opencl
-    argon2-gpu-common -lOpenCL
+    argon2-gpu-common ${OpenCL_LIBRARY}
 )
 
 add_executable(argon2-gpu-test
@@ -106,7 +149,7 @@ add_executable(argon2-gpu-test
 )
 target_include_directories(argon2-gpu-test PRIVATE src/argon2-gpu-test)
 target_link_libraries(argon2-gpu-test
-    argon2-cuda argon2-opencl argon2 -lOpenCL
+    argon2-cuda argon2-opencl argon2 ${OpenCL_LIBRARY}
 )
 
 add_executable(argon2-kraken
@@ -124,12 +167,12 @@ add_library(kraken SHARED
 )
 target_include_directories(kraken PRIVATE src/argon2-kraken)
 target_link_libraries(kraken
-    argon2-cuda argon2-opencl argon2 -lOpenCL
+    argon2-cuda argon2-opencl argon2 ${OpenCL_LIBRARY}
 )
 
 target_include_directories(argon2-kraken PRIVATE src/argon2-kraken)
 target_link_libraries(argon2-kraken
-    argon2-cuda argon2-opencl argon2 -lOpenCL
+    argon2-cuda argon2-opencl argon2 ${OpenCL_LIBRARY}
 )
 
 add_executable(argon2-gpu-bench
@@ -141,7 +184,7 @@ add_executable(argon2-gpu-bench
 )
 target_include_directories(argon2-gpu-bench PRIVATE src/argon2-gpu-bench)
 target_link_libraries(argon2-gpu-bench
-    argon2-cuda argon2-opencl argon2 -lOpenCL
+    argon2-cuda argon2-opencl argon2 ${OpenCL_LIBRARY}
 )
 
 add_test(argon2-gpu-test-opencl argon2-gpu-test -m opencl)

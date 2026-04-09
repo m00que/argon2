@@ -36,3 +36,18 @@ Makefile
 
 # Qt Creator
 *.user
+
+# Build dirs
+build/
+build-msvc/
+release/
+release-cuda/
+dist-test/
+
+# Test files
+l.txt
+w.txt
+r.txt
+r*.txt
+*.txt
+
