@@ -299,7 +299,7 @@ int main(int argc, const char *const *argv) {
             batchSize = std::stoi(argv[3]);
             if (batchSize <= 0) throw std::invalid_argument("batch size must be > 0");
         } catch (...) {
-            std::cout << "[ERROR] -b 参数无效，应为正整数" << std::endl;
+            std::cout << "[ERROR] invalid -b value, must be a positive integer" << std::endl;
             return -1;
         }
         argOffset = 2;  // skip "-b <n>"
@@ -321,7 +321,7 @@ int main(int argc, const char *const *argv) {
         std::cout << "  Association attack: argon2-kraken [mode] [-b batchSize] [leftlist] [wordlist] [potfile]" << std::endl;
         std::cout << "  Dictionary attack:  argon2-kraken [mode] [-b batchSize] -d [hash] [wordlist] [potfile]" << std::endl;
         std::cout << "  mode: opencl or cuda" << std::endl;
-        std::cout << "  -b batchSize: GPU每批处理密码数量，默认32（每批需 batchSize × m KB 显存）" << std::endl;
+        std::cout << "  -b batchSize: GPU batch size (default 32). Requires batchSize x m KB VRAM per batch." << std::endl;
         return -1;
     }
 
