@@ -1,58 +1,88 @@
 # argon2-kraken
 
-Based on the project [argon2-gpu by Ondrej Mosnáček](https://gitlab.com/omos/argon2-gpu).
+GPU-accelerated Argon2 password cracking tool, supporting CUDA (NVIDIA) and OpenCL.
 
-The [argon2-kraken](https://github.com/vegasq/argon2-kraken) program is a password cracking tool that uses the Argon2 hashing algorithm. The program can use either the OpenCL or CUDA library to run the Argon2 hashing algorithm on the GPU. The program takes in a leftlist file, a wordlist file, and a potfile, and outputs the successfully cracked passwords to the potfile.
+## Download
 
-This program implements an association attack technique inspired by [hashcat](https://github.com/hashcat/hashcat). Instead of comparing each line from the leftlist with each line from the wordlist, it associates each line from the leftlist with the line in the same position in the wordlist. This approach is intended to improve performance and reduce the amount of time required to crack passwords.
+Grab the latest Windows x64 binary from [Releases](https://github.com/m00que/argon2/releases).  
+No install needed — VC++ Redistributable is bundled.
 
-## Usage
+---
 
-```
-argon2-kraken [mode: opencl or cuda] [leftlist] [wordlist] [potfile]
-```
+## Modes
 
-## Notes
+### Association Attack (default)
 
-In Argon2, the memory size is defined in kilobytes, and the amount of memory used
-is calculated as m times the block size r times the parallelism p.
-
-The block size r is a fixed parameter in Argon2 and is equal to 1024 bytes.
-Therefore, with m=65536 and a parallelism factor of p=1, the amount of memory used
-would be `m*r*p = 65536*1024*1 = 67,108,864` bytes or 64 MB.
-TODO: Detect amount of workers based on available GPU memory.
-1080TI I use for testing has 11264 MB of on board memory, example of the hash used for testing:
-
->> $argon2id$v=19$m=65536,t=1,p=4$qK32Vuin0v8USlgec6lDFw$w5yjWJqZxCfM4EO3S9jBONpfCx0EBlyxd3MfRFhdn6U
+Pairs each line in `leftlist` with the corresponding line in `wordlist` and verifies the hash.  
+Use this when you already have candidate (username, password) pairs.
 
 ```
-65536*1024*4 == 268Mb
-11264 / 268 == 42 (lol)
+argon2-kraken.exe <mode> [-b <batchSize>] <leftlist> <wordlist> <potfile>
 ```
 
-*BUT!* At least in case of 1080TI we are not getting anywhere close to this memory utilization
-(floats around 20%), as GPU chip itself is a bottleneck that is being used up to 99%.
+### Dictionary Attack (`-d`)
 
+Tries every password in a wordlist against a single hash.  
+Classic brute-force / wordlist attack mode.
 
-## TODO
-
-1. Bring the rest of CUDA kernel variants
-2. Add `precompute` argument
-
-## Building
-
-This project uses the [CMake](https://cmake.org/) build system.
-
-First, if you haven't cloned the repository using `git clone --recursive`, you need to run:
-
-```bash
-git submodule update --init
+```
+argon2-kraken.exe <mode> [-b <batchSize>] -d <hash> <wordlist> <potfile>
 ```
 
-Then, to prepare build:
+---
 
-```bash
-cmake -DCMAKE_BUILD_TYPE=Release .
+## Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `mode` | `cuda` (NVIDIA GPU) or `opencl` (any GPU) |
+| `-b <n>` | GPU batch size — number of passwords pushed to GPU per round (default: **32**) |
+| `-d <hash>` | Enable dictionary attack mode; specify the target hash inline |
+| `leftlist` | File with hashes (association attack) |
+| `wordlist` | File with candidate passwords, one per line |
+| `potfile` | Output file — cracked results written here |
+
+---
+
+## Tuning `-b` (Batch Size)
+
+Each batch requires `batchSize × m` KB of GPU memory, where `m` is the Argon2 memory parameter from the hash.
+
+**Example:** hash with `m=65536` (64 MB per password)
+
+| `-b` | VRAM required |
+|------|--------------|
+| 32 (default) | ~2 GB |
+| 64 | ~4 GB |
+| 115 | ~7.4 GB |
+
+- The tool will **warn** if the requested batch exceeds 90% of your GPU's total VRAM.
+- If you get an out-of-memory error, lower `-b`.
+- Increasing `-b` improves throughput roughly linearly — use the highest value your GPU allows.
+
+---
+
+## Examples
+
+Verify a known password:
+```
+argon2-kraken.exe cuda -d "$argon2id$v=19$m=65536,t=3,p=1$..." passwords.txt result.txt
 ```
 
-Finally, just run `make` to build the code. Note that to use the OpenCL backend, you need to have the `data` subdirectory in the working directory (if you have the binaries in a different directory, just create a symlink using `ln -s <path_to_repo>/data data`).
+Dictionary attack with larger batch (8 GB GPU):
+```
+argon2-kraken.exe cuda -b 100 -d "$argon2id$v=19$m=65536,t=3,p=1$..." rockyou.txt result.txt
+```
+
+---
+
+## Build from Source
+
+Requirements: CMake 3.18+, MSVC 2019+, CUDA Toolkit (optional), OpenCL SDK.
+
+```
+git clone --recursive https://github.com/m00que/argon2
+cd argon2
+cmake -B build-msvc -DCMAKE_BUILD_TYPE=Release
+cmake --build build-msvc --config Release
+```
