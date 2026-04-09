@@ -22,7 +22,7 @@
 #include "base64.hpp"
 #include "strings_tools.hpp"
 
-// 查询GPU可用显存（MB），失败返回0
+// Query available GPU memory in MB, returns 0 on failure
 static uint64_t getGPUMemoryMB(const std::string &mode) {
     try {
         if (mode == "opencl") {
@@ -182,22 +182,22 @@ void processDictionary(
     const std::string &outputFile,
     int batchSize = 32
 ){
-    // 解析哈希参数以计算单个密码所需显存
+    // Parse hash params to estimate VRAM required per password
     try {
         Argon2ParamsData p = parseArgon2Hash(hash);
         uint64_t memPerPass = (uint64_t)p.memoryCost * 1024ULL;   // bytes
         uint64_t totalNeeded = memPerPass * (uint64_t)batchSize;
         uint64_t gpuMemMB = getGPUMemoryMB(mode);
 
-        std::cout << "[INFO] 每批 " << batchSize << " 个密码，"
-                  << "需要显存: " << totalNeeded / (1024*1024) << " MB";
+        std::cout << "[INFO] Batch size: " << batchSize
+                  << ", VRAM needed: " << totalNeeded / (1024*1024) << " MB";
         if (gpuMemMB > 0) {
-            std::cout << " / GPU总显存: " << gpuMemMB << " MB";
+            std::cout << " / GPU total: " << gpuMemMB << " MB";
             if (totalNeeded / (1024*1024) > gpuMemMB * 9 / 10) {
                 std::cout << std::endl
-                          << "[WARN] 批次所需显存超过GPU总量90%，可能导致失败！"
-                          << "建议将 -b 调小至 "
-                          << (gpuMemMB * 9 / 10) / (p.memoryCost / 1024) << " 以下";
+                          << "[WARN] Batch requires >90% of GPU VRAM, may fail! "
+                          << "Suggest -b <= "
+                          << (gpuMemMB * 9 / 10) / (p.memoryCost / 1024);
             }
         }
         std::cout << std::endl;
@@ -291,7 +291,7 @@ void processTasks(
 int main(int argc, const char *const *argv) {
     std::string mode = argv[1];
 
-    // 解析可选的 -b <batchSize> 参数
+    // Parse optional -b <batchSize> argument
     int batchSize = 32;
     int argOffset = 0;
     if (argc >= 4 && std::string(argv[2]) == "-b") {
@@ -305,7 +305,7 @@ int main(int argc, const char *const *argv) {
         argOffset = 2;  // skip "-b <n>"
     }
 
-    // argv[2+argOffset] 起为实际参数
+    // Effective arguments start at argv[2+argOffset]
     int realArgc = argc - argOffset;
     const char *const *args = argv + argOffset;
 
